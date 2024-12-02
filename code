@@ -1,0 +1,80 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+```
+
+```{R}
+breast_cancer <- read.csv("https://uwmadison.box.com/shared/static/hv002pb690i0rjjn7ysm642wcn6rywzf.csv")
+```
+## Data Cleaning 
+```{R}
+# Extract only numeric columns (assumed to be gene expression data)
+gene_expression <- breast_cancer[, sapply(breast_cancer, is.numeric)]
+
+gene_expression_clean <- gene_expression[complete.cases(gene_expression), ]  # Remove rows with NAs
+
+# Scale the cleaned data
+gene_expression_scaled <- scale(gene_expression_clean)
+
+# Perform PCA
+pca_results <- prcomp(gene_expression_scaled, center = TRUE, scale. = TRUE)
+
+# Check PCA summary
+summary(pca_results)
+
+# Step 5: Visualize PCA (First two components)
+pca_data <- as.data.frame(pca_results$x)
+pca_data$SampleID <- rownames(pca_data)  # Add row names for labeling if needed
+
+```
+
+## Scatterplot for first 2 principal components 
+```{R}
+# Create a scatterplot of the first two principal components
+ggplot(pca_data, aes(x = PC1, y = PC2)) +
+  geom_point(color = "blue", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "PCA of Breast Cancer Dataset",
+    x = "Principal Component 1",
+    y = "Principal Component 2"
+  )
+
+```
+
+## Facet plot for first 5 principal components 
+```{R}
+
+# Extract PCA loadings
+pca_loadings <- as.data.frame(pca_results$rotation)  # Loadings matrix
+
+# Convert to a tidy format for ggplot
+pca_loadings$terms <- rownames(pca_loadings)  # Add feature names as a column
+pca_loadings_tidy <- tidyr::pivot_longer(
+  pca_loadings,
+  cols = starts_with("PC"),  # Select principal components (e.g., PC1, PC2, ...)
+  names_to = "component",
+  values_to = "value"
+)
+
+top_terms_5 <- pca_loadings_tidy %>%
+  filter(component %in% c("PC1", "PC2", "PC3", "PC4", "PC5")) %>%
+  group_by(component) %>%
+  slice_max(abs(value), n = 10)  # Select top 10 terms by absolute loading value
+
+
+ggplot(top_terms_5, aes(x = value, y = reorder(terms, value))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~component, nrow = 1, scales = "free_y") +
+  labs(
+    title = "Top Feature Contributions to First 5 Principal Components",
+    x = "Loading Value",
+    y = NULL
+  ) +
+  theme_minimal() 
+
+
+```

@@ -3,78 +3,68 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
-
+library(shiny) 
+library(plotly)
 ```
 
 ```{R}
 breast_cancer <- read.csv("https://uwmadison.box.com/shared/static/hv002pb690i0rjjn7ysm642wcn6rywzf.csv")
 ```
-## Data Cleaning 
+
+## PCA
 ```{R}
-# Extract only numeric columns (assumed to be gene expression data)
-gene_expression <- breast_cancer[, sapply(breast_cancer, is.numeric)]
+# Extract tumor_stage and tumor_size 
+tumor_stage <- breast_cancer$tumor_stage 
+tumor_size <- breast_cancer$tumor_size 
 
-gene_expression_clean <- gene_expression[complete.cases(gene_expression), ]  # Remove rows with NAs
+# Exclude the first 31 columns and ensure the rest are numeric 
+pca_data <- breast_cancer[, -c(1:31)] 
+pca_data <- pca_data[, sapply(pca_data, is.numeric)] # Remove rows with NAs in pca_data and corresponding rows in tumor_stage and tumor_size 
+complete_cases <- complete.cases(pca_data) 
+pca_data <- pca_data[complete_cases, ] 
+tumor_stage <- tumor_stage[complete_cases] 
+tumor_size <- tumor_size[complete_cases] 
 
-# Scale the cleaned data
-gene_expression_scaled <- scale(gene_expression_clean)
+# Perform PCA 
+pca <- prcomp(pca_data, center = TRUE, scale. = TRUE) 
+pca_data <- as.data.frame(pca$x) 
 
-# Perform PCA
-pca_results <- prcomp(gene_expression_scaled, center = TRUE, scale. = TRUE)
-
-# Check PCA summary
-summary(pca_results)
-
-# Step 5: Visualize PCA (First two components)
-pca_data <- as.data.frame(pca_results$x)
-pca_data$SampleID <- rownames(pca_data)  # Add row names for labeling if needed
+# Combine PCA results with tumor_stage and tumor_size 
+pca_data$tumor_stage <- tumor_stage 
+pca_data$tumor_size <- tumor_size
 
 ```
 
-## Scatterplot for first 2 principal components 
+## Shiny App
 ```{R}
-# Create a scatterplot of the first two principal components
-ggplot(pca_data, aes(x = PC1, y = PC2)) +
-  geom_point(color = "blue", alpha = 0.7) +
-  theme_minimal() +
-  labs(
-    title = "PCA of Breast Cancer Dataset",
-    x = "Principal Component 1",
-    y = "Principal Component 2"
-  )
+# Define UI for application
+ui <- fluidPage( 
+  titlePanel("PCA of Breast Cancer Dataset"), plotlyOutput("pcaPlot") ) 
 
-```
-
-## Facet plot for first 5 principal components 
-```{R}
-
-# Extract PCA loadings
-pca_loadings <- as.data.frame(pca_results$rotation)  # Loadings matrix
-
-# Convert to a tidy format for ggplot
-pca_loadings$terms <- rownames(pca_loadings)  # Add feature names as a column
-pca_loadings_tidy <- tidyr::pivot_longer(
-  pca_loadings,
-  cols = starts_with("PC"),  # Select principal components (e.g., PC1, PC2, ...)
-  names_to = "component",
-  values_to = "value"
-)
-
-top_terms_5 <- pca_loadings_tidy %>%
-  filter(component %in% c("PC1", "PC2", "PC3", "PC4", "PC5")) %>%
-  group_by(component) %>%
-  slice_max(abs(value), n = 10)  # Select top 10 terms by absolute loading value
-
-
-ggplot(top_terms_5, aes(x = value, y = reorder(terms, value))) +
-  geom_col(show.legend = FALSE) +
-  facet_wrap(~component, nrow = 1, scales = "free_y") +
-  labs(
-    title = "Top Feature Contributions to First 5 Principal Components",
-    x = "Loading Value",
-    y = NULL
-  ) +
-  theme_minimal() 
-
+# Define server logic
+server <- function(input, output) {
+  output$pcaPlot <- renderPlotly({plot_ly(
+    pca_data, x = ~PC1, y= ~PC2, 
+    type = "scatter", mode = "markers", color = ~tumor_stage, 
+    text = ~paste("Tumor Size:", tumor_size), 
+    hoverinfo= "text") %>%
+      layout(
+        title = "PCA Plot", 
+        xaxis = list(title = "PC1"), 
+        yaxis = list(title = "PC2")) %>% 
+      event_register("plotly_click")})
+  
+  observeEvent(event_data("plotly_click"), {
+    d<- event_data("plotly_click")
+    if (length(d)) {
+      showModal(modalDialog(
+        title = "Tumor Size", 
+        paste("Tumor Size:", pca_data$tumor_size[d$pointNumber + 1])
+      ))
+    }
+  }
+      )
+}
+shinyApp(ui, server)
 
 ```

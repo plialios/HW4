@@ -1,18 +1,16 @@
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
 library(shiny) 
 library(plotly)
-```
+library(ggplot2)
 
-```{R}
+
 breast_cancer <- read.csv("https://uwmadison.box.com/shared/static/hv002pb690i0rjjn7ysm642wcn6rywzf.csv")
-```
+
 
 ## PCA
-```{R}
+
 # Extract tumor_stage and tumor_size 
 tumor_stage <- breast_cancer$tumor_stage 
 tumor_size <- breast_cancer$tumor_size 
@@ -33,38 +31,112 @@ pca_data <- as.data.frame(pca$x)
 pca_data$tumor_stage <- tumor_stage 
 pca_data$tumor_size <- tumor_size
 
+
+
+# Extract loadings from PCA
+loadings <- pca$rotation
+
+# View the loadings for PC1 and PC2
+head(loadings[, c("PC1", "PC2")])
+# Find the top contributing genes for PC1
+top_genes_pc1 <- loadings[order(abs(loadings[, "PC1"]), decreasing = TRUE), "PC1"]
+
+# Find the top contributing genes for PC2
+top_genes_pc2 <- loadings[order(abs(loadings[, "PC2"]), decreasing = TRUE), "PC2"]
+
+# Display the top 10 genes for PC1 and PC2
+top_10_pc1 <- head(top_genes_pc1, 10)
+top_10_pc2 <- head(top_genes_pc2, 10)
+
+top_10_pc1
+top_10_pc2
+
+
+# Convert top genes to data frames for ggplot
+top_10_pc1_df <- data.frame(
+  Gene = names(top_10_pc1),
+  Loading = as.numeric(top_10_pc1)
+)
+
+top_10_pc2_df <- data.frame(
+  Gene = names(top_10_pc2),
+  Loading = as.numeric(top_10_pc2)
+)
+
+
+
+# Plot for PC1
+ggplot(top_10_pc1_df, aes(x = reorder(Gene, abs(Loading)), y = Loading)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Genes Contributing to PC1",
+    x = "Genes",
+    y = "Loading"
+  ) +
+  theme_minimal()
+
+# Plot for PC2
+ggplot(top_10_pc2_df, aes(x = reorder(Gene, abs(Loading)), y = Loading)) +
+  geom_bar(stat = "identity", fill = "red") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Genes Contributing to PC2",
+    x = "Genes",
+    y = "Loading"
+  ) +
+  theme_minimal()
+
+
 ```
 
 ## Shiny App
-```{R}
-# Define UI for application
-ui <- fluidPage( 
-  titlePanel("PCA of Breast Cancer Dataset"), plotlyOutput("pcaPlot") ) 
+
+# Define UI for the application
+ui <- fluidPage(
+  # App title
+  titlePanel("PCA of Breast Cancer Dataset"),
+  
+  # Display the PCA plot
+  plotlyOutput("pcaPlot")
+)
 
 # Define server logic
 server <- function(input, output) {
-  output$pcaPlot <- renderPlotly({plot_ly(
-    pca_data, x = ~PC1, y= ~PC2, 
-    type = "scatter", mode = "markers", color = ~tumor_stage, 
-    text = ~paste("Tumor Size:", tumor_size), 
-    hoverinfo= "text") %>%
-      layout(
-        title = "PCA Plot", 
-        xaxis = list(title = "PC1"), 
-        yaxis = list(title = "PC2")) %>% 
-      event_register("plotly_click")})
   
+  # Render the PCA plot
+  output$pcaPlot <- renderPlotly({
+    plot_ly(
+      data = pca_data,
+      x = ~PC1,
+      y = ~PC2,
+      type = "scatter",
+      mode = "markers",
+      color = ~tumor_stage,
+      text = ~paste("Tumor Size:", tumor_size),
+      hoverinfo = "text"
+    ) %>%
+      layout(
+        title = "PCA Plot",
+        xaxis = list(title = "PC1"),
+        yaxis = list(title = "PC2")
+      )
+  })
+  
+  # Observe click events on the plot
   observeEvent(event_data("plotly_click"), {
-    d<- event_data("plotly_click")
-    if (length(d)) {
+    click_data <- event_data("plotly_click")
+    if (!is.null(click_data)) {
+      # Show a modal dialog with tumor size information
       showModal(modalDialog(
-        title = "Tumor Size", 
-        paste("Tumor Size:", pca_data$tumor_size[d$pointNumber + 1])
+        title = "Tumor Size",
+        paste("Tumor Size:", pca_data$tumor_size[click_data$pointNumber + 1])
       ))
     }
-  }
-      )
+  })
 }
-shinyApp(ui, server)
+
+
+shinyApp(ui,server)
 
 ```

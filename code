@@ -1,16 +1,25 @@
+---
+title: "HW4"
+author: "Penelope Lialios"
+date: "2024-11-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
 library(shiny) 
 library(plotly)
-library(ggplot2)
+```
 
-
+```{R}
 breast_cancer <- read.csv("https://uwmadison.box.com/shared/static/hv002pb690i0rjjn7ysm642wcn6rywzf.csv")
-
+```
 
 ## PCA
-
+```{R}
 # Extract tumor_stage and tumor_size 
 tumor_stage <- breast_cancer$tumor_stage 
 tumor_size <- breast_cancer$tumor_size 
@@ -63,7 +72,8 @@ top_10_pc2_df <- data.frame(
   Loading = as.numeric(top_10_pc2)
 )
 
-
+# Load ggplot2
+library(ggplot2)
 
 # Plot for PC1
 ggplot(top_10_pc1_df, aes(x = reorder(Gene, abs(Loading)), y = Loading)) +
@@ -91,7 +101,7 @@ ggplot(top_10_pc2_df, aes(x = reorder(Gene, abs(Loading)), y = Loading)) +
 ```
 
 ## Shiny App
-
+```{R}
 # Define UI for the application
 ui <- fluidPage(
   # App title
@@ -136,7 +146,7 @@ server <- function(input, output) {
   })
 }
 
-
-shinyApp(ui,server)
+# Run the application
+shinyApp(ui = ui, server = server)
 
 ```
